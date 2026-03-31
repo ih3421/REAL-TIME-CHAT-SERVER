@@ -1,14 +1,14 @@
 from flask import Flask,request
 from flask_sqlalchemy import SQLAlchemy
-import jwt, secrets, string
-from flask_socketio import SocketIO, emit, join_room,send,leave_room
+import jwt, secrets, string, jsonify, datetime, timedelta
+from flask_socketio import SocketIO, emit, join_room,leave_room
 from flask_jwt_extended import verify_jwt_in_request
 
 app = Flask(__name__)
 db = SQLAlchemy(app)
 key='secret'
 socketio = SocketIO(app, cors_allowed_origins="*")
-PUBLIC_ROUTES = {"login", "register"}
+PUBLIC_ROUTES = {"login", "reg"}
 
 @socketio.on('join')
 def on_join(data):
@@ -19,7 +19,7 @@ def on_join(data):
 
 @socketio.on('create')
 def on_create(data):
-    namespace = request.namespaces['/chat']
+    namespace = request.namespaces['/']
     rooms = list(namespace.adapter.rooms.keys()) 
     username = data['username']
     while True:
@@ -67,35 +67,35 @@ def login():
     data = request.json  
     user_name = data['username']
     password = hash(data['password'])
-    user = User.query.filter_by(username=user_name)
-    if user ==None:
-    return jsonify({'error': 'Invalid credentials'}),401
+    user = User.query.filter_by(username=user_name).first()
+    if user is None:
+        return jsonify({'error': 'Invalid credentials'}),401
     if user.password == password:
-        payload={ sub:user_name,
-                 iat: int(datetime.utcnow().timestamp()),
-                 exp: int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
+        payload={ 'sub':user_name,
+                 'iat': int(datetime.utcnow().timestamp()),
+                 'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
         token=jwt.encode(payload,key)
-        return jsonify({'token':token,'status':200})
+        return jsonify({'token':token}),200
     return jsonify({'error': 'Invalid credentials'}),401
 
 @app.route("/reg",methods=['POST'])
-def register:
+def register():
     data = request.json
     name = data['name']        
     user_name = data['username']
     password = hash(data['password'])
-    user = User.query.filter_by(username=user_name)
+    user = User.query.filter_by(username=user_name).first()
     if user:
         return jsonify({'error': 'Username taken'}),400
     user = User(
-        username = user_name
-        name = name
+        username = user_name,
+        name = name,
         password = password)
     db.session.add(user)      
     db.session.commit()       
-    payload={ sub:user_name,
-                 iat: int(datetime.utcnow().timestamp()),
-                 exp: int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
+    payload={ 'sub':user_name,
+                 'iat': int(datetime.utcnow().timestamp()),
+                 'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
     token=jwt.encode(payload,key)
     return jsonify({'token': token,'message': 'User created', 'id': user.id}),201
 
