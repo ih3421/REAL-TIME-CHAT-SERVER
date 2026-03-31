@@ -1,16 +1,51 @@
 from flask import Flask,request
 from flask_sqlalchemy import SQLAlchemy
-import jwt
-import asyncio
-from websockets.asyncio.server import serve
+import jwt, secrets, string
+from flask_socketio import SocketIO, emit, join_room
 from flask_jwt_extended import verify_jwt_in_request
-
 
 app = Flask(__name__)
 db = SQLAlchemy(app)
 key='secret'
-
+socketio = SocketIO(app, cors_allowed_origins="*")
 PUBLIC_ROUTES = {"login", "register"}
+
+@socketio.on('join')
+def on_join(data):
+    username = data['username']
+    room = data['room']
+    join_room(room)
+    send(username + ' has entered the room.', to=room)
+
+@socketio.on('create')
+def on_create(data):
+    namespace = request.namespaces['/chat']
+    rooms = list(namespace.adapter.rooms.keys()) 
+    username = data['username']
+    while True:
+        chars = string.ascii_uppercase + string.digits
+        room = ''.join(secrets.choice(chars) for _ in range(10))
+        if room not in rooms:
+            break
+    join_room(room)
+    send(' New room created. Room code = '+ room, to=room)
+    send(username + ' has entered the room.', to=room)
+    
+
+@socketio.on('leave')
+def on_leave(data):
+    username = data['username']
+    room = data['room']
+    leave_room(room)
+    send(username + ' has left the room.', to=room)
+
+@socketio.on('connect')
+def test_connect():
+    emit('my response', {'data': 'Connected'})
+
+@socketio.on('disconnect')
+def test_disconnect(reason):
+    print('Client disconnected, reason:', reason)
 
 @app.before_request
 def require_jwt_for_all_routes():
@@ -133,3 +168,7 @@ def leave_room(code):
     room.users.remove(user)
     db.session.commit()
     return jsonify({'message': 'Left room', 'room_id': room.id}), 201
+
+
+if __name__ == '__main__':
+    socketio.run(app)
