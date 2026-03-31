@@ -1,10 +1,36 @@
-from flask import Flask
+from flask import Flask,request
 from flask_sqlalchemy import SQLAlchemy
 import jwt
+import asyncio
+from websockets.asyncio.server import serve
+from flask_jwt_extended import verify_jwt_in_request
+
+
 app = Flask(__name__)
 db = SQLAlchemy(app)
 key='secret'
 
+PUBLIC_ROUTES = {"login", "register"}
+
+@app.before_request
+def require_jwt_for_all_routes():
+    if request.endpoint in PUBLIC_ROUTES:
+        return
+    verify_jwt_in_request()
+
+room_users = db.Table(
+    'room_users',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('room_id', db.Integer, db.ForeignKey('room.id'), primary_key=True)
+)
+
+class Room(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(200), nullable=True)
+    users = db.relationship('User', secondary=room_users, backref='rooms')
+    
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)  # autoincrement=True is default
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -20,7 +46,7 @@ def login():
     if user ==None:
     return jsonify({'error': 'Invalid credentials'}),401
     if user.password == password:
-        payload={ user:user_name,
+        payload={ sub:user_name,
                  iat: int(datetime.utcnow().timestamp()),
                  exp: int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
         token=jwt.encode(payload,key)
@@ -42,11 +68,50 @@ def register:
         password = password)
     db.session.add(user)      # Stage for INSERT
     db.session.commit()       # Execute SQL
+    payload={ sub:user_name,
+                 iat: int(datetime.utcnow().timestamp()),
+                 exp: int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
+    token=jwt.encode(payload,key)
+    return jsonify({'token': token,'message': 'User created', 'id': user.id}),201
+
+@app.route("/rooms",methods=['GET','POST'])
+def rooms:
+    if request.method == "GET":
+        all_rooms = Room.query.all()
+        return jsonify([{
+        'id': room.id,
+        'code': room.code,
+        'name': room.name,
+        'desc' : room.description
+    } for room in all_rooms])
+
+    elif request.method == "POST":
+        data = request.json
+        room_code = data['code']
+        desc = data['description']
+        name = data['name']
+        room = Room.query.filter_by(code = room_code)
+        if room:
+            return jsonify({'error': 'Room already exists'}),400
+        room = Room(code= room_code, name=name, description=desc)
+        db.session.add(room)
+        db.session.commit()
+        return jsonify({'message': 'Room created'}),200
+
+@app.route('/rooms/<code>/join', methods=['POST'])
+def join_room(code):
+    user_id = get_jwt_identity()
+    room = Room.query.filter_by(code=code).first()
     
-    return jsonify({'message': 'User created', 'id': user.id}), 201
-
-
-    )
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
     
-
-
+    # Check if already member
+    if user_id in [u.id for u in room.users]:
+        return jsonify({'error': 'Already in room'}), 400
+    
+    # Add user to room 
+    user = User.query.get(user_id)
+    room.users.append(user)
+    db.session.commit()
+    return jsonify({'message': 'Joined room', 'room_id': room.id}), 201
