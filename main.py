@@ -115,3 +115,21 @@ def join_room(code):
     room.users.append(user)
     db.session.commit()
     return jsonify({'message': 'Joined room', 'room_id': room.id}), 201
+
+@app.route('/rooms/<code>/leave', methods=['POST'])
+def leave_room(code):
+    user_id = get_jwt_identity()
+    room = Room.query.filter_by(code=code).first()
+    
+    if not room:
+        return jsonify({'error': 'Room not found'}), 404
+    
+    # Check if already member
+    if user_id not in [u.id for u in room.users]:
+        return jsonify({'error': 'Already left room'}), 400
+    
+    # Add user to room 
+    user = User.query.get(user_id)
+    room.users.remove(user)
+    db.session.commit()
+    return jsonify({'message': 'Left room', 'room_id': room.id}), 201
