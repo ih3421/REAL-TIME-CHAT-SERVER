@@ -1,6 +1,7 @@
-from flask import Flask,request
+from flask import Flask, request, jsonify
+from datetime import datetime, timedelta
+import jwt, secrets, string
 from flask_sqlalchemy import SQLAlchemy
-import jwt, secrets, string, jsonify, datetime, timedelta
 from flask_socketio import SocketIO, emit, join_room,leave_room
 from flask_jwt_extended import verify_jwt_in_request
 
@@ -8,14 +9,14 @@ app = Flask(__name__)
 db = SQLAlchemy(app)
 key='secret'
 socketio = SocketIO(app, cors_allowed_origins="*")
-PUBLIC_ROUTES = {"login", "reg"}
+PUBLIC_ROUTES = {"login", "register"}
 
 @socketio.on('join')
 def on_join(data):
     username = data['username']
     room = data['room']
     join_room(room)
-    emit(username + ' has entered the room.', to=room)
+    emit(joined,username + ' has entered the room.', to=room)
 
 @socketio.on('create')
 def on_create(data):
@@ -28,8 +29,8 @@ def on_create(data):
         if room not in rooms:
             break
     join_room(room)
-    emit(' New room created. Room code = '+ room, to=room)
-    emit(username + ' has entered the room.', to=room)
+    emit(created,' New room created. Room code = '+ room, to=room)
+    emit(joined,username + ' has entered the room.', to=room)
     
 
 @socketio.on('leave')
@@ -37,15 +38,15 @@ def on_leave(data):
     username = data['username']
     room = data['room']
     leave_room(room)
-    emit(username + ' has left the room.', to=room)
+    emit(left,username + ' has left the room.', to=room)
 
 @socketio.on('connect')
 def test_connect():
     emit('my response', {'data': 'Connected'})
 
 @socketio.on('disconnect')
-def test_disconnect(reason):
-    print('Client disconnected, reason:', reason)
+def test_disconnect():
+    print('Client disconnected')
 @socketio.on('send_message')
 def handle_send_message(data):
     emit('new_message', data, to=data['room'])
