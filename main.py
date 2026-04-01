@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit, join_room,leave_room
+from flask_socketio import SocketIO, emit, join_room,leave_room, disconnect
 from flask_jwt_extended import create_access_token, JWTManager, jwt_required, get_jwt_identity, decode_token
 
 app = Flask(__name__)
@@ -27,7 +27,11 @@ def on_join(data):
 def on_create(data):
     namespace = request.namespaces['/']
     rooms = list(namespace.adapter.rooms.keys()) 
-    username = data['username']
+    if request.sid not in socket_users:
+    disconnect()
+    return
+    username = socket_users[request.sid]
+
     while True:
         chars = string.ascii_uppercase + string.digits
         room = ''.join(secrets.choice(chars) for _ in range(10))
@@ -40,7 +44,10 @@ def on_create(data):
 
 @socketio.on('leave')
 def on_leave(data):
-    username = data['username']
+    if request.sid not in socket_users:
+        disconnect()
+    return
+    username = socket_users[request.sid]
     room = data['room']
     leave_room(room)
     emit('left',username + ' has left the room.', to=room)
@@ -48,7 +55,7 @@ def on_leave(data):
 @socketio.on("connect")
 def handle_connect(auth):
     token = None
-    if "token" in auth:
+    if auth and "token" in auth:
         token = auth["token"]
     if not token:
         return False
@@ -62,6 +69,7 @@ def handle_connect(auth):
 
 @socketio.on('disconnect')
 def test_disconnect():
+    socket_users.pop(request.sid, None)
     print('Client disconnected')
 @socketio.on('send_message')
 def handle_send_message(data):
