@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-from datetime import datetime, timedelta
 import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room,leave_room
@@ -9,6 +8,7 @@ app = Flask(__name__)
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config["JWT_SECRET_KEY"] = "secret"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
 jwt = JWTManager(app)
 PUBLIC_ROUTES = {"login", "register"}
 
@@ -17,7 +17,7 @@ def on_join(data):
     username = data['username']
     room = data['room']
     join_room(room)
-    emit(joined,username + ' has entered the room.', to=room)
+    emit('joined',username + ' has entered the room.', to=room)
 
 @socketio.on('create')
 def on_create(data):
@@ -30,8 +30,8 @@ def on_create(data):
         if room not in rooms:
             break
     join_room(room)
-    emit(created,' New room created. Room code = '+ room, to=room)
-    emit(joined,username + ' has entered the room.', to=room)
+    emit('created',' New room created. Room code = '+ room, to=room)
+    emit('joined',username + ' has entered the room.', to=room)
     
 
 @socketio.on('leave')
@@ -39,7 +39,7 @@ def on_leave(data):
     username = data['username']
     room = data['room']
     leave_room(room)
-    emit(left,username + ' has left the room.', to=room)
+    emit('left',username + ' has left the room.', to=room)
 
 @socketio.on('connect')
 def test_connect():
@@ -68,15 +68,10 @@ class User(db.Model):
 def login():
     data = request.json  
     user_name = data['username']
-    salt = bcrypt.gensalt()
-    password = bcrypt.hashpw(data['password'].encode('utf-8'),salt).decode('utf-8')
     user = User.query.filter_by(username=user_name).first()
     if user is None:
         return jsonify({'error': 'Invalid credentials'}),401
-    if user.password == password:
-        payload={ 'sub':user_name,
-                 'iat': int(datetime.utcnow().timestamp()),
-                 'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
+    if bcrypt.checkpw(data['password'].encode('utf-8'), user.password.encode('utf-8')):
         token=create_access_token(identity=user_name)
         return jsonify({'token':token}),200
     return jsonify({'error': 'Invalid credentials'}),401
@@ -97,9 +92,6 @@ def register():
         password = password)
     db.session.add(user)      
     db.session.commit()       
-    payload={ 'sub':user_name,
-                 'iat': int(datetime.utcnow().timestamp()),
-                 'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
     token=create_access_token(identity=user_name)
     return jsonify({'token': token,'message': 'User created', 'id': user.id}),201
 
