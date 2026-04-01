@@ -25,7 +25,7 @@ def on_join(data):
 
 @socketio.on('create')
 def on_create(data):
-    namespace = request.namespaces['/']
+    namespace = request.namespaces[]
     rooms = list(namespace.adapter.rooms.keys()) 
     if request.sid not in socket_users:
         disconnect()
@@ -73,7 +73,13 @@ def test_disconnect():
     print('Client disconnected')
 @socketio.on('send_message')
 def handle_send_message(data):
-    emit('new_message', data, to=data['room'])
+    if request.sid not in socket_users:
+        disconnect()
+        return
+    emit('new_message', {'room': data['room'],
+        'user': socket_users[request.sid],
+        'message': data['message']
+    },to=data['room'])
 
     
 class User(db.Model):
@@ -122,4 +128,6 @@ def register():
     return jsonify({'token': token,'message': 'User created', 'id': user.id}),201
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     socketio.run(app)
