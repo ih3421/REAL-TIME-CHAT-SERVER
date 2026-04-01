@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room,leave_room
-from flask_jwt_extended import create_access_token, JWTManager, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, JWTManager, jwt_required, get_jwt_identity, decode_token
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "secret"
@@ -10,13 +10,18 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 jwt = JWTManager(app)
+socket_users = {}
 
-@socketio.on('join')
+@socketio.on("join")
 def on_join(data):
-    username = data['username']
-    room = data['room']
+    if request.sid not in socket_users:
+        disconnect()
+        return
+    username = socket_users[request.sid]
+    room = data["room"]
     join_room(room)
-    emit('joined',username + ' has entered the room.', to=room)
+    emit("joined", f"{username} has entered the room.", to=room)
+
 
 @socketio.on('create')
 def on_create(data):
@@ -40,9 +45,20 @@ def on_leave(data):
     leave_room(room)
     emit('left',username + ' has left the room.', to=room)
 
-@socketio.on('connect')
-def test_connect():
-    emit('my response', {'data': 'Connected'})
+@socketio.on("connect")
+def handle_connect(auth):
+    token = None
+    if "token" in auth:
+        token = auth["token"]
+    if not token:
+        return False
+    try:
+        decoded = decode_token(token)
+        username = decoded["sub"]
+        socket_users[request.sid] = username
+        return True
+    except Exception:
+        return False
 
 @socketio.on('disconnect')
 def test_disconnect():
