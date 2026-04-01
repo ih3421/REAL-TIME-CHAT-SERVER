@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room,leave_room
-from flask_jwt_extended import verify_jwt_in_request, create_access_token, JWTManager
+from flask_jwt_extended import verify_jwt_in_request, create_access_token, JWTManager, jwt_required, get_jwt_identity
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "secret"
@@ -10,7 +10,6 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 jwt = JWTManager(app)
-PUBLIC_ROUTES = {"login", "register"}
 
 @socketio.on('join')
 def on_join(data):
@@ -52,17 +51,20 @@ def test_disconnect():
 def handle_send_message(data):
     emit('new_message', data, to=data['room'])
 
-@app.before_request
-def require_jwt_for_all_routes():
-    if request.endpoint in PUBLIC_ROUTES:
-        return
-    verify_jwt_in_request()
     
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)  # autoincrement=True is default
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200))
     name = db.Column(db.String(60))
+
+@app.route("/chat", methods=["GET"])
+@jwt_required()
+def chat():   
+    return jsonify({
+        "message": "Chat enabled",
+        "user": get_jwt_identity()
+    }), 200
 
 @app.route("/login",methods=['POST'])
 def login():
