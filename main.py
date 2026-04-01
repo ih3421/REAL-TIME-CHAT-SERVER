@@ -5,10 +5,10 @@ from flask_socketio import SocketIO, emit, join_room,leave_room
 from flask_jwt_extended import verify_jwt_in_request, create_access_token, JWTManager
 
 app = Flask(__name__)
-db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
 app.config["JWT_SECRET_KEY"] = "secret"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
+db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 jwt = JWTManager(app)
 PUBLIC_ROUTES = {"login", "register"}
 
