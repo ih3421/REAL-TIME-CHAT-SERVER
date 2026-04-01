@@ -28,8 +28,8 @@ def on_create(data):
     namespace = request.namespaces['/']
     rooms = list(namespace.adapter.rooms.keys()) 
     if request.sid not in socket_users:
-    disconnect()
-    return
+        disconnect()
+        return
     username = socket_users[request.sid]
 
     while True:
@@ -46,7 +46,7 @@ def on_create(data):
 def on_leave(data):
     if request.sid not in socket_users:
         disconnect()
-    return
+        return
     username = socket_users[request.sid]
     room = data['room']
     leave_room(room)
