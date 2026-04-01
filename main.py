@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room,leave_room
-from flask_jwt_extended import verify_jwt_in_request, create_access_token, JWTManager, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, JWTManager, jwt_required, get_jwt_identity
 
 app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = "secret"
