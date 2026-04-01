@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
 from datetime import datetime, timedelta
-import jwt, secrets, string
+import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room,leave_room
-from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended import verify_jwt_in_request, create_access_token
 
 app = Flask(__name__)
 db = SQLAlchemy(app)
@@ -67,7 +67,8 @@ class User(db.Model):
 def login():
     data = request.json  
     user_name = data['username']
-    password = hash(data['password'])
+    salt = bcrypt.gensalt()
+    password = bcrypt.hashpw(data['password'],salt)
     user = User.query.filter_by(username=user_name).first()
     if user is None:
         return jsonify({'error': 'Invalid credentials'}),401
@@ -75,7 +76,7 @@ def login():
         payload={ 'sub':user_name,
                  'iat': int(datetime.utcnow().timestamp()),
                  'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
-        token=jwt.encode(payload,key)
+                token=create_access_token(identity=user_name)
         return jsonify({'token':token}),200
     return jsonify({'error': 'Invalid credentials'}),401
 
@@ -84,7 +85,8 @@ def register():
     data = request.json
     name = data['name']        
     user_name = data['username']
-    password = hash(data['password'])
+    salt = bcrypt.gensalt()
+    password = bcrypt.hashpw(data['password'],salt)
     user = User.query.filter_by(username=user_name).first()
     if user:
         return jsonify({'error': 'Username taken'}),400
@@ -97,7 +99,7 @@ def register():
     payload={ 'sub':user_name,
                  'iat': int(datetime.utcnow().timestamp()),
                  'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
-    token=jwt.encode(payload,key)
+    token=create_access_token(identity=user_name)
     return jsonify({'token': token,'message': 'User created', 'id': user.id}),201
 
 if __name__ == '__main__':
