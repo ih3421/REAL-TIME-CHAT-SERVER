@@ -11,7 +11,7 @@ db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 jwt = JWTManager(app)
 socket_users = {}
-
+active_rooms = set()
 @socketio.on("join")
 def on_join(data):
     if request.sid not in socket_users:
@@ -25,8 +25,6 @@ def on_join(data):
 
 @socketio.on('create')
 def on_create(data):
-    namespace = request.namespaces[]
-    rooms = list(namespace.adapter.rooms.keys()) 
     if request.sid not in socket_users:
         disconnect()
         return
@@ -35,7 +33,8 @@ def on_create(data):
     while True:
         chars = string.ascii_uppercase + string.digits
         room = ''.join(secrets.choice(chars) for _ in range(10))
-        if room not in rooms:
+        if room not in active_rooms:
+            active_rooms.add(room)
             break
     join_room(room)
     emit('created',' New room created. Room code = '+ room, to=room)
