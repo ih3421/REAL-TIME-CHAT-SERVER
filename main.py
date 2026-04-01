@@ -3,12 +3,13 @@ from datetime import datetime, timedelta
 import secrets, string, bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room,leave_room
-from flask_jwt_extended import verify_jwt_in_request, create_access_token
+from flask_jwt_extended import verify_jwt_in_request, create_access_token, JWTManager
 
 app = Flask(__name__)
 db = SQLAlchemy(app)
-key='secret'
 socketio = SocketIO(app, cors_allowed_origins="*")
+app.config["JWT_SECRET_KEY"] = "secret"
+jwt = JWTManager(app)
 PUBLIC_ROUTES = {"login", "register"}
 
 @socketio.on('join')
@@ -60,7 +61,7 @@ def require_jwt_for_all_routes():
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)  # autoincrement=True is default
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(30))
+    password = db.Column(db.String(200))
     name = db.Column(db.String(60))
 
 @app.route("/login",methods=['POST'])
@@ -68,7 +69,7 @@ def login():
     data = request.json  
     user_name = data['username']
     salt = bcrypt.gensalt()
-    password = bcrypt.hashpw(data['password'],salt)
+    password = bcrypt.hashpw(data['password'].encode('utf-8'),salt).decode('utf-8')
     user = User.query.filter_by(username=user_name).first()
     if user is None:
         return jsonify({'error': 'Invalid credentials'}),401
@@ -76,7 +77,7 @@ def login():
         payload={ 'sub':user_name,
                  'iat': int(datetime.utcnow().timestamp()),
                  'exp': int((datetime.utcnow() + timedelta(hours=1)).timestamp())}
-                token=create_access_token(identity=user_name)
+        token=create_access_token(identity=user_name)
         return jsonify({'token':token}),200
     return jsonify({'error': 'Invalid credentials'}),401
 
@@ -86,7 +87,7 @@ def register():
     name = data['name']        
     user_name = data['username']
     salt = bcrypt.gensalt()
-    password = bcrypt.hashpw(data['password'],salt)
+    password = bcrypt.hashpw(data['password'].encode('utf-8'),salt).decode('utf-8')
     user = User.query.filter_by(username=user_name).first()
     if user:
         return jsonify({'error': 'Username taken'}),400
